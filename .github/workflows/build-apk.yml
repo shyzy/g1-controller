@@ -1,0 +1,31 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Move code to project root
+        run: |
+          mv g1-webapp/* .
+          mv g1-webapp/.[!.]* . 2>/dev/null || true
+          rm -rf g1-webapp
+
+      - name: Build APK with Buildozer
+        run: |
+          docker run --rm \
+            -v "$(pwd):/app" \
+            kivy/buildozer:latest \
+            -v android debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: G1-Controller-APK
+          path: bin/*.apk
+          if-no-files-found: error
