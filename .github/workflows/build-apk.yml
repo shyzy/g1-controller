@@ -12,7 +12,7 @@ jobs:
 
       - name: Build APK with Buildozer
         run: |
-          docker run --rm \
+          yes | docker run --rm \
             -v "$(pwd):/app" \
             kivy/buildozer:latest \
             -v android debug
