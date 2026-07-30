@@ -12,10 +12,10 @@ jobs:
 
       - name: Build APK with Buildozer
         run: |
-          docker run --rm -i \
+          docker run --rm \
             -v "$(pwd):/app" \
             kivy/buildozer:latest \
-            -v android debug
+            -v --allow-root android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
