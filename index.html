@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>G1 控制器</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e; color: #fff; font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100vh; display: flex; flex-direction: column;
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
+}
+
+/* 顶栏 */
+.header {
+  background: #16213e; padding: 10px 16px; display: flex; align-items: center;
+  justify-content: space-between; font-size: 13px;
+}
+.header .status { display: flex; align-items: center; gap: 8px; }
+.header .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.green { background: #34a853; }
+.dot.red { background: #ea4335; }
+.dot.yellow { background: #fbbc04; }
+
+/* 摇杆状态区 */
+.joystick-panel {
+  background: #16213e; margin: 8px; border-radius: 12px; padding: 12px;
+  display: flex; gap: 16px; font-size: 12px;
+}
+.joystick-panel div { flex: 1; text-align: center; color: #9aa0a6; }
+.joystick-panel span { display: block; color: #fff; font-size: 16px; margin-top: 4px; }
+
+/* 快捷按钮网格 */
+.grid-title {
+  padding: 8px 12px 4px; font-size: 13px; color: #fbbc04; font-weight: 600;
+}
+.grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 12px;
+}
+.shortcut-btn {
+  background: #0f3460; border: none; border-radius: 12px; padding: 16px 8px;
+  color: #fff; text-align: center; cursor: pointer; transition: transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.shortcut-btn:active {
+  transform: scale(0.92);
+}
+.shortcut-btn .icon { font-size: 28px; display: block; margin-bottom: 4px; }
+.shortcut-btn .name { font-size: 12px; font-weight: 500; }
+.shortcut-btn .desc { font-size: 9px; color: #9aa0a6; margin-top: 2px; }
+
+/* 底部提示 */
+.footer {
+  padding: 12px; text-align: center; font-size: 11px; color: #5f6368;
+  margin-top: auto;
+}
+
+/* 编辑弹窗 - 简单实现 */
+.edit-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7); z-index: 100;
+}
+.edit-overlay.active { display: flex; align-items: center; justify-content: center; }
+.edit-panel {
+  background: #16213e; border-radius: 16px; padding: 20px; width: 85%; max-width: 340px;
+}
+.edit-panel h3 { margin-bottom: 12px; font-size: 16px; }
+.edit-panel label { font-size: 12px; color: #9aa0a6; display: block; margin: 8px 0 4px; }
+.edit-panel input, .edit-panel select {
+  width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #333;
+  background: #0f3460; color: #fff; font-size: 14px;
+}
+.edit-panel .btns { display: flex; gap: 8px; margin-top: 16px; }
+.edit-panel .btns button {
+  flex: 1; padding: 10px; border-radius: 8px; border: none; font-size: 14px; cursor: pointer;
+}
+.btn-cancel { background: #5f6368; color: #fff; }
+.btn-save { background: #1a73e8; color: #fff; }
+.btn-del { background: #ea4335; color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="status">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">连接中...</span>
+  </div>
+  <button onclick="toggleEdit()" style="background:#5f6368;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:12px;">⚙️ 编辑</button>
+</div>
+
+<div class="joystick-panel">
+  <div>左摇杆<br><span id="lx">0.00</span><br><span id="ly">0.00</span></div>
+  <div>右摇杆<br><span id="rx">0.00</span><br><span id="ry">0.00</span></div>
+  <div>按键<br><span id="buttons" style="font-size:11px;">—</span></div>
+</div>
+
+<div class="grid-title">🔘 快捷按钮</div>
+<div class="grid" id="shortcutGrid"></div>
+
+<div class="footer">左摇杆移动 · 右摇杆旋转 · A键切换行走/站立</div>
+
+<!-- 编辑弹窗 -->
+<div class="edit-overlay" id="editOverlay">
+  <div class="edit-panel">
+    <h3 id="editTitle">添加快捷按钮</h3>
+    <label>按钮名称</label>
+    <input id="editName" placeholder="例如: 跳舞">
+    <label>图标</label>
+    <input id="editIcon" placeholder="💃" value="🔘">
+    <label>颜色</label>
+    <select id="editColor">
+      <option value="#e53e3e">红色</option>
+      <option value="#38a169">绿色</option>
+      <option value="#3182ce">蓝色</option>
+      <option value="#805ad5">紫色</option>
+      <option value="#d69e2e">黄色</option>
+      <option value="#dd6b20">橙色</option>
+    </select>
+    <label>遥控器组合键（选填，按官方遥控器）</label>
+    <select id="editCombo" onchange="onComboChange()">
+      <option value="">— 自定义动作 —</option>
+      <optgroup label="模式切换">
+        <option value="L2+Y">L2 + Y &nbsp; 零力矩</option>
+        <option value="L2+B">L2 + B &nbsp; ① 阻尼</option>
+        <option value="L2+UP">L2 + ↑ &nbsp; ② 锁定站立</option>
+        <option value="L2+X">L2 + X &nbsp; ⑤ 躺→站</option>
+        <option value="L2+LEFT">L2 + ← &nbsp; ④ 落座</option>
+        <option value="L2+A">L2 + A &nbsp; ⑥ 蹲→站</option>
+        <option value="R1+R2+X">R1 + R2 + X &nbsp; ⑩ 自适应起身</option>
+      </optgroup>
+      <optgroup label="运控切换">
+        <option value="R2+A">R2 + A &nbsp; ③ 走跑运控</option>
+        <option value="R2+UP">R2 + ↑ &nbsp; 低速</option>
+        <option value="R2+DOWN">R2 + ↓ &nbsp; 高速</option>
+        <option value="R1+X">R1 + X &nbsp; ⑦ 常规运控</option>
+        <option value="R1+Y">R1 + Y 三连 &nbsp; ⑦ 常规运控</option>
+      </optgroup>
+      <optgroup label="交互功能">
+        <option value="SELECT+A">SELECT + A &nbsp; 握手</option>
+        <option value="SELECT+Y">SELECT + Y &nbsp; 高举挥手</option>
+        <option value="Y_Y">双击 Y &nbsp; 胸前挥手</option>
+        <option value="X_X">双击 X &nbsp; 飞吻</option>
+        <option value="A_A">双击 A &nbsp; 鼓掌</option>
+        <option value="R2+B">R2 + B &nbsp; ⑧ 越障运控</option>
+        <option value="START_START">双击 START &nbsp; 踏步/站立</option>
+      </optgroup>
+      <optgroup label="舞蹈运控">
+        <option value="R1+B">R1 + B &nbsp; 功夫</option>
+        <option value="R1+SELECT">R1 + SELECT &nbsp; 舞蹈 1</option>
+        <option value="R1+UP">R1 + ↑ &nbsp; 舞蹈 2</option>
+        <option value="R1+LEFT">R1 + ← &nbsp; 舞蹈 3</option>
+        <option value="R1+DOWN">R1 + ↓ &nbsp; 机械舞 3</option>
+        <option value="R2+UP2">R2 + ↑ &nbsp; 截拳道</option>
+        <option value="R2+LEFT2">R2 + ← &nbsp; 扭扭舞</option>
+        <option value="L1+X">L1 + X &nbsp; 机械舞 1</option>
+        <option value="L1+Y">L1 + Y &nbsp; 机械舞 4</option>
+        <option value="L1+A">L1 + A &nbsp; 芭蕾</option>
+      </optgroup>
+    </select>
+    <label>执行动作</label>
+    <select id="editAction">
+      <option value="Damping">急停 / 阻尼模式</option>
+      <option value="StandUp">站立</option>
+      <option value="SitDown">坐下</option>
+      <option value="StartWalk">开始行走</option>
+      <option value="StopWalk">停止行走</option>
+      <option value="ZeroTorque">零力矩模式</option>
+      <option value="SwitchMoveSkill">切换动作技能 💃</option>
+    </select>
+    <label>动作参数（选择"切换动作技能"时填写，如 Dance/Wave）</label>
+    <input id="editParam" placeholder="Dance / Wave / HandShake / Bow / ...">
+    <label>按钮描述</label>
+    <input id="editDesc" placeholder="例如: = R1+B 长按的效果">
+    <div class="btns">
+      <button class="btn-cancel" onclick="closeEdit()">取消</button>
+      <button class="btn-del" id="delBtn" onclick="deleteShortcut()" style="display:none">删除</button>
+      <button class="btn-save" onclick="saveShortcut()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 遥控器组合键 → G1 指令映射（按官方遥控器说明） =====
+const COMBO_MAP = {
+  // ----- 模式切换 -----
+  "L2+Y":      { action: "ZeroTorque",         param: "",      name: "零力矩",       icon: "🌀" },
+  "L2+B":      { action: "Damping",            param: "",      name: "① 阻尼",       icon: "🛑" },
+  "L2+UP":     { action: "StandUp",            param: "",      name: "② 锁定站立",   icon: "🧍" },
+  "L2+X":      { action: "StandUp",            param: "",      name: "⑤ 躺→站",      icon: "🛌" },
+  "L2+LEFT":   { action: "SitDown",            param: "",      name: "④ 落座",       icon: "🪑" },
+  "L2+A":      { action: "StandUp",            param: "",      name: "⑥ 蹲→站",      icon: "🏋️" },
+  "R1+R2+X":   { action: "StandUp",            param: "",      name: "⑩ 自适应起身", icon: "🤖" },
+
+  // ----- 运控切换 -----
+  "R2+A":      { action: "StartWalk",          param: "",      name: "③ 走跑运控",   icon: "🏃" },
+  "R2+UP":     { action: "StartWalk",          param: "",      name: "低速",         icon: "🐢" },
+  "R2+DOWN":   { action: "StartWalk",          param: "",      name: "高速",         icon: "🐇" },
+  "R1+X":      { action: "StartWalk",          param: "",      name: "⑦ 常规运控",   icon: "🚶" },
+  "R1+Y":      { action: "StartWalk",          param: "",      name: "⑦ 常规运控三连",icon: "🚶" },
+
+  // ----- 交互功能 -----
+  "SELECT+A":  { action: "SwitchMoveSkill",    param: "HandShake",     name: "握手",       icon: "🤝" },
+  "SELECT+Y":  { action: "SwitchMoveSkill",    param: "HighWave",      name: "高举挥手",   icon: "🙌" },
+  "Y_Y":       { action: "SwitchMoveSkill",    param: "ChestWave",     name: "胸前挥手",   icon: "👋" },
+  "X_X":       { action: "SwitchMoveSkill",    param: "BlowKiss",      name: "飞吻",       icon: "😘" },
+  "A_A":       { action: "SwitchMoveSkill",    param: "Clap",          name: "鼓掌",       icon: "👏" },
+  "R2+B":      { action: "StartWalk",          param: "",      name: "⑧ 越障运控",   icon: "⛰️" },
+  "START_START": { action: "StandUp",          param: "",      name: "踏步/站立",   icon: "🚶" },
+
+  // ----- 舞蹈运控 -----
+  "R1+B":      { action: "SwitchMoveSkill",    param: "KungFu",        name: "功夫",       icon: "🥋" },
+  "R1+SELECT": { action: "SwitchMoveSkill",    param: "Dance1",        name: "舞蹈 1",     icon: "💃" },
+  "R1+UP":     { action: "SwitchMoveSkill",    param: "Dance2",        name: "舞蹈 2",     icon: "💃" },
+  "R1+LEFT":   { action: "SwitchMoveSkill",    param: "Dance3",        name: "舞蹈 3",     icon: "💃" },
+  "R1+DOWN":   { action: "SwitchMoveSkill",    param: "MechDance3",    name: "机械舞 3",   icon: "🤖" },
+  "R2+UP2":    { action: "SwitchMoveSkill",    param: "JeetKuneDo",    name: "截拳道",     icon: "🥊" },
+  "R2+LEFT2":  { action: "SwitchMoveSkill",    param: "TwistDance",    name: "扭扭舞",     icon: "🌀" },
+  "L1+X":      { action: "SwitchMoveSkill",    param: "MechDance1",    name: "机械舞 1",   icon: "🤖" },
+  "L1+Y":      { action: "SwitchMoveSkill",    param: "MechDance4",    name: "机械舞 4",   icon: "🤖" },
+  "L1+A":      { action: "SwitchMoveSkill",    param: "Ballet",        name: "芭蕾",       icon: "🩰" },
+};
+
+function onComboChange() {
+  const combo = document.getElementById('editCombo').value;
+  if (combo && COMBO_MAP[combo]) {
+    const map = COMBO_MAP[combo];
+    document.getElementById('editName').value = map.name;
+    document.getElementById('editIcon').value = map.icon;
+    document.getElementById('editAction').value = map.action;
+    document.getElementById('editParam').value = map.param;
+    document.getElementById('editDesc').value = '= ' + combo + ' 效果';
+  }
+}
+let ws = null;
+let shortcuts = [];
+let editingId = null;
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws');
+  
+  ws.onopen = () => setStatus('已连接', 'green');
+  ws.onclose = () => { setStatus('已断开', 'red'); setTimeout(connectWS, 2000); };
+  ws.onerror = () => setStatus('连接错误', 'red');
+  
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'status') setStatus(msg.text, msg.dot || 'green');
+      else if (msg.type === 'joystick') updateJoystick(msg);
+      else if (msg.type === 'shortcuts') { shortcuts = msg.list; renderGrid(); }
+    } catch(err) {}
+  };
+}
+
+function setStatus(text, dot) {
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('statusDot').className = 'dot ' + dot;
+}
+
+function updateJoystick(d) {
+  document.getElementById('lx').textContent = d.lx || '0.00';
+  document.getElementById('ly').textContent = d.ly || '0.00';
+  document.getElementById('rx').textContent = d.rx || '0.00';
+  document.getElementById('ry').textContent = d.ry || '0.00';
+  document.getElementById('buttons').textContent = d.buttons || '—';
+}
+
+// ===== 快捷按钮 =====
+function renderGrid() {
+  const grid = document.getElementById('shortcutGrid');
+  grid.innerHTML = '';
+  shortcuts.forEach(s => {
+    const btn = document.createElement('div');
+    btn.className = 'shortcut-btn';
+    btn.style.background = s.color || '#0f3460';
+    btn.innerHTML = `<span class="icon">${s.icon||'🔘'}</span><span class="name">${s.name}</span><span class="desc">${s.desc||''}</span>`;
+    btn.onclick = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({type:'trigger', id:s.id})); };
+    grid.appendChild(btn);
+  });
+}
+
+// ===== 编辑功能 =====
+let editMode = 'add';
+
+function toggleEdit() {
+  editMode = 'list';
+  // 简单实现：弹出列表让用户选择编辑或添加
+  // 这里简化为直接弹出添加框
+  editingId = null;
+  document.getElementById('editTitle').textContent = '➕ 添加快捷按钮';
+  document.getElementById('delBtn').style.display = 'none';
+  document.getElementById('editName').value = '';
+  document.getElementById('editIcon').value = '🔘';
+  document.getElementById('editColor').value = '#3182ce';
+  document.getElementById('editCombo').value = '';
+  document.getElementById('editAction').value = 'Damping';
+  document.getElementById('editParam').value = '';
+  document.getElementById('editDesc').value = '';
+  document.getElementById('editOverlay').classList.add('active');
+}
+
+function closeEdit() {
+  document.getElementById('editOverlay').classList.remove('active');
+}
+
+function saveShortcut() {
+  const combo = document.getElementById('editCombo').value;
+  const data = {
+    name: document.getElementById('editName').value || '未命名',
+    icon: document.getElementById('editIcon').value || '🔘',
+    color: document.getElementById('editColor').value,
+    action: document.getElementById('editAction').value,
+    param: document.getElementById('editParam').value,
+    desc: document.getElementById('editDesc').value || (combo ? '= ' + combo + ' 效果' : ''),
+    combo: combo || '',
+  };
+  if (editingId) data.id = editingId;
+  ws.send(JSON.stringify({type:'save_shortcut', ...data}));
+  closeEdit();
+}
+
+function deleteShortcut() {
+  if (editingId) ws.send(JSON.stringify({type:'delete_shortcut', id: editingId}));
+  closeEdit();
+}
+
+// ===== 启动 =====
+connectWS();
+</script>
+</body>
+</html>
