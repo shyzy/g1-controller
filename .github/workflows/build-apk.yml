@@ -16,7 +16,7 @@ jobs:
             -v "$(pwd):/app" \
             --entrypoint /bin/bash \
             kivy/buildozer:latest \
-            -c "echo y | buildozer -v android debug"
+            -c "cd /app && echo y | buildozer -v android debug"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
