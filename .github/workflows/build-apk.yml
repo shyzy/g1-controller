@@ -14,8 +14,9 @@ jobs:
         run: |
           docker run --rm \
             -v "$(pwd):/app" \
+            --entrypoint /bin/bash \
             kivy/buildozer:latest \
-            -v --allow-root android debug
+            -c "echo y | buildozer -v android debug"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
