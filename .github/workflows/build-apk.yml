@@ -4,23 +4,19 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  analyze:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build APK with Buildozer
+      - name: 查看仓库结构和 buildozer.spec 位置
         run: |
-          docker run --rm \
-            -v "$(pwd):/app" \
-            --entrypoint /bin/bash \
-            kivy/buildozer:latest \
-            -c "cd /app && echo y | buildozer -v android debug"
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: G1-Controller-APK
-          path: bin/*.apk
-          if-no-files-found: error
+          echo "=== 仓库根目录文件 ==="
+          ls -la
+          echo ""
+          echo "=== 是否有 buildozer.spec ==="
+          find . -name "buildozer.spec" -type f
+          echo ""
+          echo "=== 完整目录树 ==="
+          find . -not -path './.git/*' -not -name '.git'
