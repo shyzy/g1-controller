@@ -10,12 +10,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Move code to project root
-        run: |
-          mv g1-webapp/* .
-          mv g1-webapp/.[!.]* . 2>/dev/null || true
-          rm -rf g1-webapp
-
       - name: Build APK with Buildozer
         run: |
           docker run --rm \
